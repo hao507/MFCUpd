@@ -37,6 +37,7 @@ void CMainPageDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CMainPageDlg, CDialogEx)
 	ON_NOTIFY(NM_RCLICK, IDC_LIST_CANMSG, &CMainPageDlg::OnNMRClickListCanmsg)
 	ON_COMMAND(ID_MENU_CLRLIST, &CMainPageDlg::OnMenuClrlist)
+	ON_BN_CLICKED(IDC_BUTTON_CLEAR, &CMainPageDlg::OnBnClickedButtonClear)
 END_MESSAGE_MAP()
 
 
@@ -193,6 +194,14 @@ void CMainPageDlg::OnNMRClickListCanmsg(NMHDR *pNMHDR, LRESULT *pResult)
 void CMainPageDlg::OnMenuClrlist()
 {
 	// TODO: 在此添加命令处理程序代码
+	m_RecvList.DeleteAllItems();
+	UpdateData(FALSE);//更新数据
+}
+
+
+void CMainPageDlg::OnBnClickedButtonClear()
+{
+	// TODO: 在此添加控件通知处理程序代码
 	m_RecvList.DeleteAllItems();
 	UpdateData(FALSE);//更新数据
 }

@@ -426,6 +426,8 @@ void CUdsNetwork::send_singleframe(BYTE msg_buf[], WORD msg_dlc)
 	for (i = 0; i < msg_dlc; i++)
 		send_buf[1 + i] = msg_buf[i];
 
+	N_USData_confirm(N_OK);
+
 	ZTai_UDS_Send(send_buf, UDS_VALID_FRAME_LEN);
 
 }
@@ -579,6 +581,7 @@ void CUdsNetwork::network_main(void)
 		}
 		else
 		{
+			N_USData_confirm(N_OK);
 			clear_network();
 		}
 		m_CriticalSection.Unlock();

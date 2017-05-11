@@ -66,19 +66,23 @@ void CUdsClient::uds_timer_start(BYTE num)
 	if (num >= UDS_TIMER_CNT) return;
 
 	if (num == UDS_TIMER_FSA) {
-		uds_timer[UDS_TIMER_FSA] = TIMEOUT_FSA;
+		uds_timer[UDS_TIMER_FSA] = GetTickCount();
+		TIMOUT_VALUE[UDS_TIMER_FSA] = TIMEOUT_FSA;
 		uds_timeo[UDS_TIMER_FSA] = 0;
 	}
 	if (num == UDS_TIMER_S3client) {
-		uds_timer[UDS_TIMER_S3client] = TIMEOUT_S3client;
+		uds_timer[UDS_TIMER_S3client] = GetTickCount();
+		TIMOUT_VALUE[UDS_TIMER_S3client] = TIMEOUT_S3client;
 		uds_timeo[UDS_TIMER_S3client] = 0;
 	}
 	if (num == UDS_TIMER_P2client) {
-		uds_timer[UDS_TIMER_P2client] = TIMEOUT_P2client;
+		uds_timer[UDS_TIMER_P2client] = GetTickCount();
+		TIMOUT_VALUE[UDS_TIMER_P2client] = TIMEOUT_P2client;
 		uds_timeo[UDS_TIMER_P2client] = 0;
 	}
 	if (num == UDS_TIMER_P2client_x) {
-		uds_timer[UDS_TIMER_P2client_x] = TIMEOUT_P2client_x;
+		uds_timer[UDS_TIMER_P2client_x] = GetTickCount();
+		TIMOUT_VALUE[UDS_TIMER_P2client_x] = TIMEOUT_P2client_x;
 		uds_timeo[UDS_TIMER_P2client_x] = 0;
 	}
 }
@@ -106,17 +110,20 @@ int CUdsClient::uds_timer_run(BYTE num)
 	{
 		return 0;
 	}
-	else if (uds_timer[num] == 1)
-	{
-		uds_timer[num] = 0;
-		uds_timeo[num] = 1;
-		return -1;
-	}
 	else
 	{
-		/* if (uds_timer[num] > 1) */
-		uds_timer[num]--;
-		return 1;
+		DWORD Tikcs = GetTickCount();
+
+		if (Tikcs - uds_timer[num] >= TIMOUT_VALUE[num])
+		{
+			uds_timer[num] = 0;
+			uds_timeo[num] = 1;
+			return -1;
+		}
+		else
+		{
+			return 1;
+		}
 	}
 
 }
@@ -200,10 +207,26 @@ void CUdsClient::N_USData_indication(BYTE msg_buf[], WORD msg_dlc, n_result_t n_
 	{
 		m_RspSid = USD_GET_POSITIVE_RSP(msg_buf[0]);
 		m_RspSubfunction = UDS_GET_SUB_FUNCTION(msg_buf[1]);
-		if (m_ReqSid == SID_10 && m_ReqSubfunction != UDS_SESSION_STD &&
-			m_ReqSsp == 0x00)
+		if (m_ReqSsp == 0x00)
 		{
-			uds_timer_start(UDS_TIMER_S3client);
+			if (m_ReqSid == SID_10)
+			{
+				if (m_ReqSubfunction == UDS_SESSION_STD)
+					uds_timer_stop(UDS_TIMER_S3client);
+				else
+					uds_timer_start(UDS_TIMER_S3client);
+			}
+
+			if (m_ReqSid == SID_11)
+			{
+				uds_timer_stop(UDS_TIMER_S3client);
+			}
+
+			/* Subsequent start the S3cleint timer */
+			if (m_ReqSid == SID_3E)
+			{
+				uds_timer_start(UDS_TIMER_S3client);
+			}
 		}
 		/* Subsequent start the S3cleint timer */
 		if (m_ReqSsp == 0x00 && uds_timer_chk(UDS_TIMER_S3client) > 0)
@@ -219,8 +242,6 @@ void CUdsClient::N_USData_indication(BYTE msg_buf[], WORD msg_dlc, n_result_t n_
 		RspData[i] = msg_buf[i];
 
 	m_GetRsp = TRUE;
-	m_ExpRsp = FALSE;
-
 }
 
 
@@ -234,36 +255,56 @@ void CUdsClient::N_USData_indication(BYTE msg_buf[], WORD msg_dlc, n_result_t n_
 */
 void CUdsClient::N_USData_confirm(n_result_t n_result)
 {
-	if (n_result != N_OK)
+	if (n_result == N_OK)
 	{
-		n_ResultErr = TRUE;
-		n_Result = n_result;
 		uds_timer_start(UDS_TIMER_P2client);
-
-
 		if (m_FunReq == TRUE)
 		{
-			if (m_ReqSid == SID_10 && m_ReqSubfunction != UDS_SESSION_STD)
+			if (m_ReqSid == SID_10)
 			{
-				uds_timer_start(UDS_TIMER_S3client);
+				if (m_ReqSubfunction == UDS_SESSION_STD)
+					uds_timer_stop(UDS_TIMER_S3client);
+				else
+				    uds_timer_start(UDS_TIMER_S3client);
 			}
-			/* Subsequent start the S3cleint timer */
-			if (m_ReqSid == SID_3E)
+			if (m_ReqSid == SID_11)
 			{
-				uds_timer_start(UDS_TIMER_S3client);
+				uds_timer_stop(UDS_TIMER_S3client);
 			}
 		}
 		else
 		{
-			if (m_ReqSid == SID_10 && m_ReqSubfunction != UDS_SESSION_STD && 
-				m_ReqSsp == 0x01)
+			if (m_ReqSsp == 0x01)
 			{
-				uds_timer_start(UDS_TIMER_S3client);
+				if (m_ReqSid == SID_10)
+				{
+					if (m_ReqSubfunction == UDS_SESSION_STD)
+						uds_timer_stop(UDS_TIMER_S3client);
+					else
+						uds_timer_start(UDS_TIMER_S3client);
+				}
+
+				if (m_ReqSid == SID_11)
+				{
+					uds_timer_stop(UDS_TIMER_S3client);
+				}
+
+				/* Subsequent start the S3cleint timer */
+				if (m_ReqSid == SID_3E)
+				{
+					uds_timer_start(UDS_TIMER_S3client);
+				}
 			}
 			/* Subsequent start the S3cleint timer */
 			if (m_ReqSsp == 0x01 && uds_timer_chk(UDS_TIMER_S3client) > 0)
 				uds_timer_start(UDS_TIMER_S3client);
 		}
+
+	}
+	else
+	{
+		n_ResultErr = TRUE;
+		n_Result = n_result;
 	}
 }
 
@@ -277,19 +318,22 @@ void CUdsClient::N_USData_confirm(n_result_t n_result)
 */
 void CUdsClient::do_cmdlist(void)
 {
-	if (m_ExpRsp == FALSE)
-	{
-		INT_PTR CmdSize = m_CmdList.GetSize();
-		if (CmdSize <= 0) return;
-		m_CmdNow = m_CmdList[0];
-		m_CmdList.RemoveAt(0, 1);
-		if (m_CmdNow.SID == SID_27 && (m_CmdNow.CmdBuf[0] == 0x02 || m_CmdNow.CmdBuf[0] == 0x06))
-		{
-			UdsUtil::KeyCalcu(m_RspBuf, &m_CmdNow.CmdBuf[1]);
-		}
+	if (uds_timer_chk(UDS_TIMER_P2client) > 0)   /* P2client is running */
+		return;
 
-		request(m_CmdNow.SID, m_CmdNow.CmdBuf, m_CmdNow.CmdLen);
+	if (uds_timer_chk(UDS_TIMER_P2client_x) > 0) /* P2*client is running */
+		return;
+
+	INT_PTR CmdSize = m_CmdList.GetSize();
+	if (CmdSize <= 0) return;
+	m_CmdNow = m_CmdList[0];
+	m_CmdList.RemoveAt(0, 1);
+	if (m_CmdNow.SID == SID_27 && (m_CmdNow.CmdBuf[0] == 0x02 || m_CmdNow.CmdBuf[0] == 0x06))
+	{
+		UdsUtil::KeyCalcu(m_RspBuf, &m_CmdNow.CmdBuf[1]);
 	}
+
+	request(m_CmdNow.SID, m_CmdNow.CmdBuf, m_CmdNow.CmdLen);
 }
 
 /**
@@ -443,21 +487,21 @@ void CUdsClient::do_upgrade(void)
 			CmdNew.SID = SID_22;
 			CmdNew.CmdBuf[0] = 0xF1;
 			CmdNew.CmdBuf[1] = 0x87;
-			CmdNew.CmdLen = 3;
+			CmdNew.CmdLen = 2;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_DTCOFF:
 			//Push request cmd, Set DTC Off
 			CmdNew.SID = SID_85;
 			CmdNew.CmdBuf[0] = 0x02;
-			CmdNew.CmdLen = 2;
+			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_DISABLE_RXTX:
 			CmdNew.SID = SID_28;
 			CmdNew.CmdBuf[0] = 0x03;
 			CmdNew.CmdBuf[1] = 0x01;
-			CmdNew.CmdLen = 3;
+			CmdNew.CmdLen = 2;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_PROGRAM_SESSION:
@@ -632,7 +676,6 @@ BYTE CUdsClient::main_loop(void)
 	}
 	if (uds_timer_run(UDS_TIMER_P2client) < 0)
 	{
-		m_ExpRsp = FALSE; /* Wait reponse timeout */
 		m_GetRsp = FALSE;
 		m_ReqSid = 0;
 		m_UpdRsp = 0;
@@ -642,7 +685,6 @@ BYTE CUdsClient::main_loop(void)
 	}
 	if (uds_timer_run(UDS_TIMER_P2client_x) < 0)
 	{
-		m_ExpRsp = FALSE; /* Wait reponse timeout */
 		m_GetRsp = FALSE;
 		m_ReqSid = 0;
 		m_UpdRsp = 0;
@@ -654,7 +696,10 @@ BYTE CUdsClient::main_loop(void)
 	do_cmdlist();
 
 	if (do_response(RspData, RspDlc) != 0)
+	{
+		uds_timer_stop(UDS_TIMER_S3client);
 		ret |= RET_RESPONSE;
+	}
 	if (upd_ticks >= TIMOUT_UPGRAD_MS)
 	{
 		upd_ticks = 0;
@@ -688,11 +733,9 @@ void CUdsClient::request(BYTE SvcId, BYTE ReqBuf[], UINT ReqLen)
 {
 	BYTE cmd_buf[BUF_LEN];
 
-	m_ExpRsp = TRUE;
-
 	m_ReqSid = SvcId;
-	m_ReqSsp = UDS_GET_SUB_FUNCTION_SUPPRESS_POSRSP(ReqBuf[1]);
-	m_ReqSubfunction = UDS_GET_SUB_FUNCTION(ReqBuf[1]);
+	m_ReqSsp = UDS_GET_SUB_FUNCTION_SUPPRESS_POSRSP(ReqBuf[0]);
+	m_ReqSubfunction = UDS_GET_SUB_FUNCTION(ReqBuf[0]);
 
 	cmd_buf[0] = SvcId;
 	for (UINT i = 0; i < ReqLen; i++)

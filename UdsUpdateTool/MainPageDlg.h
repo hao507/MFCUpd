@@ -37,4 +37,5 @@ public:
 	void PrintLog(UINT LogColor, CString LogContent);
 	afx_msg void OnNMRClickListCanmsg(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnMenuClrlist();
+	afx_msg void OnBnClickedButtonClear();
 };

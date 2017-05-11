@@ -73,7 +73,7 @@ typedef enum __UDS_NRC_ENUM__
 #define UDS_GET_SUB_FUNCTION(byte)     (byte & 0x7fu)
 
 #define TIMEOUT_FSA          (10000) /* 10s */
-#define TIMEOUT_S3client     (4000)  /* 4000ms */
+#define TIMEOUT_S3client     (3000)  /* 3000ms */
 #define TIMEOUT_P2client     (150)   /* 150ms , according to m12 Diagnostic Specification */
 #define TIMEOUT_P2client_x   (5000)  /* 5000ms, according to m12 Diagnostic Specification */
 /* uds app layer timer */
@@ -148,8 +148,9 @@ private:
 	BOOL m_FileOpen;
 
 	/* uds user layer timer */
-	UINT uds_timer[UDS_TIMER_CNT];
-	BYTE uds_timeo[UDS_TIMER_CNT];
+	DWORD uds_timer[UDS_TIMER_CNT];
+	DWORD TIMOUT_VALUE[UDS_TIMER_CNT];
+	BYTE  uds_timeo[UDS_TIMER_CNT];
 public:
 	UINT m_Fucid = FUNCID;
 	UINT m_Phyid = PHYSID;

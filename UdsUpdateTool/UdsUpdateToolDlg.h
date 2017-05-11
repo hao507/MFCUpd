@@ -49,7 +49,11 @@ private:
 	CDialog* pDialog[5];  //用来保存对话框对象指针
 
 	CUdsClient UdsClient;
-
+public:
+	UINT m_Bgnid;
+	UINT m_Endid;
+	UINT m_CanChnl;
+	BOOL m_FilterEn;
 public:
 	afx_msg void OnTcnSelchangeTabMain(NMHDR *pNMHDR, LRESULT *pResult);
 	static INT  TransmitCanmsg(VCI_CAN_OBJ *SendObj);
@@ -57,6 +61,10 @@ public:
 	static UINT ReceiveThread(void *param);
 
 	afx_msg void OnMenuOpendev();
+	afx_msg void OnMenuClosdev();
 	afx_msg void OnMenuStartUpdate();
 	afx_msg void OnMenuStopUpdate();
+	afx_msg void OnMenuEcuReset();
+	afx_msg void OnMenuSessionStd();
+	afx_msg void OnMenuSessionEol();
 };

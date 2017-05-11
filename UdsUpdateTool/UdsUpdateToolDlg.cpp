@@ -9,6 +9,7 @@
 #include "afxdialogex.h"
 #include "UdsUtil.h"
 #include "ControlCAN.h"
+#include "OpenDevDlg.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -77,6 +78,10 @@ BEGIN_MESSAGE_MAP(CUdsUpdateToolDlg, CDialogEx)
 	ON_COMMAND(ID_MENU_OPENDEV, &CUdsUpdateToolDlg::OnMenuOpendev)
 	ON_COMMAND(ID_MENU_START_UPDATE, &CUdsUpdateToolDlg::OnMenuStartUpdate)
 	ON_COMMAND(ID_MENU_STOP_UPDATE,  &CUdsUpdateToolDlg::OnMenuStopUpdate)
+	ON_COMMAND(ID_MENU_CLOSDEV, &CUdsUpdateToolDlg::OnMenuClosdev)
+	ON_COMMAND(ID_MENU_ECU_RESET, &CUdsUpdateToolDlg::OnMenuEcuReset)
+	ON_COMMAND(ID_MENU_SESSION_STD, &CUdsUpdateToolDlg::OnMenuSessionStd)
+	ON_COMMAND(ID_MENU_SESSION_EOL, &CUdsUpdateToolDlg::OnMenuSessionEol)
 END_MESSAGE_MAP()
 
 
@@ -259,7 +264,7 @@ UINT CUdsUpdateToolDlg::ReceiveThread(LPVOID v)
 			ReceivedID = pCanObj[num].ID;
 			if (ReceivedID == dlg->UdsClient.m_Rspid)
 				dlg->UdsClient.netowrk_recv_frame(0, pCanObj[num].Data, pCanObj[num].DataLen);
-			//dlg->m_MainPage.InsertItem(0, &pCanObj[num]);
+			dlg->m_MainPage.InsertItem(0, &pCanObj[num]);
 		}
 
 		if (dlg->UdsClient.n_ResultErr == TRUE)
@@ -285,7 +290,7 @@ UINT CUdsUpdateToolDlg::UdsMainThread(LPVOID v)
 	{
 		main_ret = pObj->main_loop();
 		if (main_ret != 0) {
-			str.Format(_T(">>uds main loop. timer timeout %d"), main_ret);
+			str.Format(_T(">>uds main loop. error %d"), main_ret);
 			dlg->m_MainPage.PrintLog(0, str);
 		}
 		Sleep(1); /* 1ms */
@@ -297,8 +302,31 @@ UINT CUdsUpdateToolDlg::UdsMainThread(LPVOID v)
 void CUdsUpdateToolDlg::OnMenuOpendev()
 {
 	// TODO: 在此添加命令处理程序代码
-	CUpdateDLg  Dlg;
-	INT DlgRet = Dlg.DoModal();
+	COpenDevDlg  Dlg;
+	INT DlgRet;
+
+	m_MainPage.PrintLog(0, _T(">>Open Can Device"));
+	DlgRet = Dlg.DoModal();
+
+	m_Bgnid = Dlg.m_Bgnid;
+	m_Endid = Dlg.m_Endid;
+	m_CanChnl = Dlg.m_CanChnl;
+	m_FilterEn = Dlg.m_FilterEn;
+}
+
+void CUdsUpdateToolDlg::OnMenuClosdev()
+{
+	// TODO: 在此添加命令处理程序代码
+	m_MainPage.PrintLog(0, _T(">>Close Can Device"));
+
+	if (VCI_CloseDevice(VCI_USBCAN2, CAN_DEVINDEX) != 1)
+	{
+		m_MainPage.PrintLog(0, _T("      Fail"));
+	}
+	else
+	{
+		m_MainPage.PrintLog(0, _T("      Done"));
+	}
 }
 
 
@@ -329,4 +357,60 @@ void CUdsUpdateToolDlg::OnMenuStartUpdate()
 void CUdsUpdateToolDlg::OnMenuStopUpdate()
 {
 	// TODO: 在此添加命令处理程序代码
+}
+
+
+
+void CUdsUpdateToolDlg::OnMenuEcuReset()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+
+	//Request Externded session
+	CmdNew.SID = SID_10;
+	CmdNew.CmdBuf[0] = 0x03;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+
+	//Push request cmd, request seed
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x01;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+
+	//Push request cmd, send key
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x02;
+	CmdNew.CmdLen = 5;
+	UdsClient.push_cmd(CmdNew);
+
+	//Request Reset
+	CmdNew.SID = SID_11;
+	CmdNew.CmdBuf[0] = 0x01;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+}
+
+
+void CUdsUpdateToolDlg::OnMenuSessionStd()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+	//Request Externded session
+	CmdNew.SID = SID_10;
+	CmdNew.CmdBuf[0] = 0x01;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+}
+
+
+void CUdsUpdateToolDlg::OnMenuSessionEol()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+	//Request Externded session
+	CmdNew.SID = SID_10;
+	CmdNew.CmdBuf[0] = 0x03;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
 }
