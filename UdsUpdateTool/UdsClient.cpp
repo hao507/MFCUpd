@@ -12,7 +12,9 @@
 #include "ControlCAN.h"
 #include "UdsUpdateTool.h"
 #include "UdsUpdateToolDlg.h"
+#include "timeapi.h"
 
+#pragma comment( lib,"winmm.lib" )
 
 /*******************************************************************************
 Type declaration
@@ -45,7 +47,10 @@ CUdsClient::CUdsClient() : CUdsNetwork()
 	m_FunReq = FALSE;
 	m_ReqSsp = 0;
 
-	m_FileOpen = FALSE;
+	pdri_buf = NULL;
+	papp_buf = NULL;
+
+	m_EntBoot = 0;
 }
 
 CUdsClient::~CUdsClient()
@@ -66,22 +71,22 @@ void CUdsClient::uds_timer_start(BYTE num)
 	if (num >= UDS_TIMER_CNT) return;
 
 	if (num == UDS_TIMER_FSA) {
-		uds_timer[UDS_TIMER_FSA] = GetTickCount();
+		uds_timer[UDS_TIMER_FSA] = timeGetTime();
 		TIMOUT_VALUE[UDS_TIMER_FSA] = TIMEOUT_FSA;
 		uds_timeo[UDS_TIMER_FSA] = 0;
 	}
 	if (num == UDS_TIMER_S3client) {
-		uds_timer[UDS_TIMER_S3client] = GetTickCount();
+		uds_timer[UDS_TIMER_S3client] = timeGetTime();
 		TIMOUT_VALUE[UDS_TIMER_S3client] = TIMEOUT_S3client;
 		uds_timeo[UDS_TIMER_S3client] = 0;
 	}
 	if (num == UDS_TIMER_P2client) {
-		uds_timer[UDS_TIMER_P2client] = GetTickCount();
+		uds_timer[UDS_TIMER_P2client] = timeGetTime();
 		TIMOUT_VALUE[UDS_TIMER_P2client] = TIMEOUT_P2client;
 		uds_timeo[UDS_TIMER_P2client] = 0;
 	}
 	if (num == UDS_TIMER_P2client_x) {
-		uds_timer[UDS_TIMER_P2client_x] = GetTickCount();
+		uds_timer[UDS_TIMER_P2client_x] = timeGetTime();
 		TIMOUT_VALUE[UDS_TIMER_P2client_x] = TIMEOUT_P2client_x;
 		uds_timeo[UDS_TIMER_P2client_x] = 0;
 	}
@@ -112,7 +117,7 @@ int CUdsClient::uds_timer_run(BYTE num)
 	}
 	else
 	{
-		DWORD Tikcs = GetTickCount();
+		DWORD Tikcs = timeGetTime();
 
 		if (Tikcs - uds_timer[num] >= TIMOUT_VALUE[num])
 		{
@@ -307,6 +312,264 @@ void CUdsClient::N_USData_confirm(n_result_t n_result)
 		n_Result = n_result;
 	}
 }
+/**
+* read_aline - read a line from .hex file
+*
+* @dst_buff  :
+* @buff_len  :
+*
+* returns:
+*     read len
+*/
+int CUdsClient::read_aline(unsigned char *dst_buff, UINT buff_len)
+{
+	int rdn_n;
+	CString Rdstr;
+
+	if (myFile.ReadString(Rdstr) == TRUE)
+	{
+		rdn_n = UdsUtil::str2char(Rdstr, dst_buff, buff_len) - 1;
+		printf("ian.h: read [%d] bytes from myFile, buff len is [%d].\n", rdn_n, buff_len);
+	}
+	else
+	{
+		rdn_n = 0;
+		printf("ian.h:hex file read end***************************\n");
+	}
+
+	return rdn_n;
+}
+
+/**
+* read_memaddr - read app data from .hex file
+*
+* @void  :
+*
+* returns:
+*     read len
+*/
+INT CUdsClient::read_memaddr(UINT &mem_addr, UINT &mem_size)
+{
+	BYTE hex_record[RECORD_BUF_LEN];
+	BYTE hex_temp[DATA_BUF_LEN];
+	int  record_len;
+	UINT base_addr;
+	UINT ext_addr;
+	UINT end_addr;
+	BYTE get_addr_flag = 0;
+
+	BYTE r_start;
+	BYTE r_count;
+	UINT r_addr;
+	BYTE r_type;
+	BYTE r_data[DATA_BUF_LEN];
+
+	mem_addr = 0;
+	mem_size = 0;
+
+	INT  whl = 1;
+	do
+	{
+		record_len = read_aline(hex_record, RECORD_BUF_LEN);
+
+		if (record_len > 0)
+		{
+			/* Start code, one character, an ASCII colon ':'. */
+			r_start = hex_record[0];
+			if (r_start != ':')
+				continue;
+
+			/* hex record used two characters explain one hex data */
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[1], hex_temp, 2);
+			/* get record count */
+			r_count = hex_temp[0];
+			if (record_len != (r_count * 2 + 11)) { /*start 1,type 2,count 2, addr 4, checksum 2, CR LF 2*/
+				printf("the s19 record len err.\n");
+				break;
+			}
+
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[3], hex_temp, 4);
+			/* get record addr */
+			r_addr = 0;
+			r_addr = hex_temp[0];
+			r_addr = ((r_addr << 8) | hex_temp[1]);
+
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[7], hex_temp, 2);
+			/* get record type */
+			r_type = hex_temp[0];
+
+			/* get address,data and checksum,transfer to hex data*/
+			UdsUtil::ascii_to_hex(&hex_record[9], r_data, r_count * 2);
+
+			printf("s19 count = [%d],s19 record len = [%d]\n", r_count, record_len);
+
+			switch (r_type)
+			{
+			case 00:
+				ext_addr = ((base_addr << 16) | r_addr);
+				if (get_addr_flag == 0)
+				{
+					get_addr_flag = 1;
+					mem_addr = ext_addr;
+				}
+				end_addr = ext_addr + r_count - 1;
+				break;
+			case 01:
+				/* .hex file end */
+				whl = 0;
+				break;
+			case 04:
+				base_addr = 0;
+				base_addr = r_data[0];
+				base_addr = ((base_addr << 8) | r_data[1]);
+				break;
+			case 02:
+			case 03:
+				base_addr = 0;
+			case 05:
+				/**
+				* The 4 data bytes represent the 32-bit value loaded into the
+				* EIP register of the 80386 and higher CPU
+				* 类型05后面跟的是4字节地址，将赋给（STM8或者ARM芯片的）PC指针。
+				*/
+				break;
+			default:
+				/* .hex file err */
+				whl = 0;
+				break;
+			}
+		}
+
+	} while (whl && record_len > 0);
+
+	mem_size = end_addr - mem_addr + 1;
+	return 0;
+}
+
+int CUdsClient::read_memdata(LPBYTE mem_buf, UINT mem_addr, UINT mem_size)
+{
+	BYTE hex_record[RECORD_BUF_LEN];
+	BYTE hex_temp[DATA_BUF_LEN];
+	int  record_len;
+	int  read_len;
+	UINT base_addr;
+	UINT ext_addr;
+
+	BYTE r_start;
+	BYTE r_count;
+	UINT r_addr;
+	BYTE r_type;
+	BYTE r_data[DATA_BUF_LEN];
+
+	read_len = 0;
+
+	int whl = 1;
+	do
+	{
+		record_len = read_aline(hex_record, RECORD_BUF_LEN);
+
+		if (record_len > 0)
+		{
+			/* Start code, one character, an ASCII colon ':'. */
+			r_start = hex_record[0];
+			if (r_start != ':')
+				continue;
+
+			/* hex record used two characters explain one hex data */
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[1], hex_temp, 2);
+			/* get record count */
+			r_count = hex_temp[0];
+			if (record_len != (r_count * 2 + 11)) { /*start 1,type 2,count 2, addr 4, checksum 2, CR LF 2*/
+				printf("the s19 record len err.\n");
+				break;
+			}
+
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[3], hex_temp, 4);
+			/* get record addr */
+			r_addr = 0;
+			r_addr = hex_temp[0];
+			r_addr = ((r_addr << 8) | hex_temp[1]);
+
+			/* transfer record count to hex data */
+			UdsUtil::ascii_to_hex(&hex_record[7], hex_temp, 2);
+			/* get record type */
+			r_type = hex_temp[0];
+
+			/* get address,data and checksum,transfer to hex data*/
+			UdsUtil::ascii_to_hex(&hex_record[9], r_data, r_count * 2);
+
+			printf("s19 count = [%d],s19 record len = [%d]\n", r_count, record_len);
+
+			switch (r_type)
+			{
+			case 00:
+				ext_addr = ((base_addr << 16) | r_addr);
+
+				if (ext_addr >= (mem_addr + read_len))
+				{
+					memcpy(mem_buf + ext_addr - mem_addr, r_data, r_count);
+
+					if (ext_addr > (mem_addr + read_len))
+					{
+						memset(mem_buf + read_len, 0, ext_addr - mem_addr - read_len);
+					}
+			
+					read_len = ext_addr - mem_addr + r_count;
+				}
+				else
+				{
+					/* r_addr err */
+					whl = 0;
+				}
+				break;
+			case 01:
+				/* file end */
+				whl = 0;
+				break;
+			case 04:
+				base_addr = 0;
+				base_addr = r_data[0];
+				base_addr = ((base_addr << 8) | r_data[1]);
+				break;
+			case 02:
+			case 03:
+			case 05:
+			default:
+				break;
+			}
+		}
+
+	} while (whl && record_len > 0);
+
+	return read_len;
+}
+
+
+/**
+* read_block - read a block data from pmem_buf
+*
+* @dst_buff  :
+* @block_len :
+*
+* returns:
+*     read len
+*/
+int CUdsClient::read_block(const LPBYTE mem_buff, UINT mem_size, unsigned char *dst_buff, UINT block_len)
+{
+	if (dst_buff == NULL || mem_buff == NULL) return -1;
+	int read_len;
+	if ((mem_size - total_xmit_len) >= block_len)
+		read_len = block_len;
+	else
+		read_len = mem_size - total_xmit_len;
+	memcpy(dst_buff, mem_buff + total_xmit_len, read_len);
+	return read_len;
+}
 
 /**
 * do_cmdlist - pop cmd from cmdlist,and send the uds cmd
@@ -323,7 +586,7 @@ void CUdsClient::do_cmdlist(void)
 
 	if (uds_timer_chk(UDS_TIMER_P2client_x) > 0) /* P2*client is running */
 		return;
-
+	UdsCmd m_CmdNow;
 	INT_PTR CmdSize = m_CmdList.GetSize();
 	if (CmdSize <= 0) return;
 	m_CmdNow = m_CmdList[0];
@@ -337,7 +600,7 @@ void CUdsClient::do_cmdlist(void)
 }
 
 /**
-* do_upgrade_rsp - handle the upgrade response, Called by main_loop
+* do_response - handle the upgrade response, Called by main_loop
 *
 * @void  :
 *
@@ -350,24 +613,26 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 	if (m_GetRsp == FALSE) return 0;
 	m_GetRsp = FALSE;
 
-	if (msg_buf[0] == NEGATIVE_RSP)
+	if (msg_buf[0] == NEGATIVE_RSP && m_RspNrc != NRC_SERVICE_BUSY)
 	{
-		upgrade_step = UDS_PROG_NONE;
+		upgrade_status = UDS_PROG_NONE;
 		return 0x01;
 	}
 
 	switch (m_RspSid)
 	{
 	    case SID_10:
-			if (upgrade_step == UDS_PROG_EXTENDED_SESSION && m_RspSubfunction == UDS_SESSION_EOL)
+			m_EntBoot = 0;
+			if (upgrade_status == UDS_PROG_EXTENDED_SESSION && m_RspSubfunction == UDS_SESSION_EOL)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_READ_DIDF187;
+				upgrade_status = UDS_PROG_READ_DIDF187;
 			}
-			if (upgrade_step == UDS_PROG_PROGRAM_SESSION && m_RspSubfunction == UDS_SESSION_PROG)
+			if (upgrade_status == UDS_PROG_PROGRAM_SESSION && m_RspSubfunction == UDS_SESSION_PROG)
 			{
+				Sleep(1500); /* sleep 1s for sa */
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_SA;
+				upgrade_status = UDS_PROG_SA;
 			}
 			break;
 		case SID_11:
@@ -376,20 +641,39 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 			WORD did;
 			did = ((WORD)msg_buf[1]) << 8;
 			did |= msg_buf[2];
-			if (upgrade_step == UDS_PROG_READ_DIDF187 && did == 0xF187)
+			if (did == 0xF187)
 			{
-				m_UpdRsp = TRUE;
 				memcpy(ecu_part_num, &RspData[3], 15);
-				upgrade_step = UDS_PROG_DTCOFF;
+				if (upgrade_status == UDS_PROG_READ_DIDF187)
+				{
+					m_UpdRsp = TRUE;
+					upgrade_status = UDS_PROG_DTCOFF;
+				}
 			}
+			if (did == 0xF186)
+			{
+				cur_seesion = RspData[3];
+				if (upgrade_status == UDS_PROG_READ_DIDF186)
+				{
+					m_UpdRsp = TRUE;
+					if (cur_seesion == UDS_SESSION_STD)
+						upgrade_status = UDS_PROG_EXTENDED_SESSION;
+					if (cur_seesion == UDS_SESSION_EOL)
+						upgrade_status = UDS_PROG_READ_DIDF187;
+					if (cur_seesion == UDS_SESSION_PROG)
+						upgrade_status = UDS_PROG_SA;
+				}
+			}
+
 			break;
 		case SID_2E:
+			upgrade_status = UDS_PROG_ENUM_MAX;
 			break;
 		case SID_27:
-			if (upgrade_step == UDS_PROG_SA && m_RspSubfunction == 0x06)
+			if (upgrade_status == UDS_PROG_SA && m_RspSubfunction == 0x06)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_FLASH_DRIVER_CRC32;
+				upgrade_status = UDS_PROG_FLASH_DRIVER_REQ_DOWLOAD;
 			}
 
 			if (msg_dlc == 6 && (m_RspSubfunction == 0x01 || m_RspSubfunction == 0x05))
@@ -401,55 +685,91 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 			}
 			break;
 		case SID_28:
-			if (upgrade_step == UDS_PROG_DISABLE_RXTX)
+			if (upgrade_status == UDS_PROG_DISABLE_RXTX)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_PROGRAM_SESSION;
+				upgrade_status = UDS_PROG_PROGRAM_SESSION;
 			}
 			break;
 		case SID_31:
 			WORD rid;
 			rid = ((WORD)msg_buf[2]) << 8;
 			rid |= msg_buf[3];
-			if (upgrade_step == UDS_PROG_FLASH_DRIVER_CRC32 && rid == 0xF001)
-				upgrade_step = UDS_PROG_ERASE_MEMORY;
-			if (upgrade_step == UDS_PROG_ERASE_MEMORY && rid == 0xFF00)
-				upgrade_step = UDS_PROG_APP_REQ_DOWNLOAD;
-			if (upgrade_step == UDS_PROG_APP_CRC32 && rid == 0xF001)
-				upgrade_step = UDS_PROG_CHECK_DEPENDENCY;
-			if (upgrade_step == UDS_PROG_CHECK_DEPENDENCY && rid == 0xFF01)
-				upgrade_step = UDS_PROG_ECU_RESET;
-			break;
-		case SID_34:
-			if (upgrade_step == UDS_PROG_APP_REQ_DOWNLOAD)
+			if (upgrade_status == UDS_PROG_FLASH_DRIVER_CRC32 && rid == 0xF001)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_APP_DOWNLOADING;
+				upgrade_status = UDS_PROG_ERASE_MEMORY;
+			}
+			if (upgrade_status == UDS_PROG_ERASE_MEMORY && rid == 0xFF00)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_APP_REQ_DOWNLOAD;
+			}
+			if (upgrade_status == UDS_PROG_APP_CRC32 && rid == 0xF001)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_CHECK_DEPENDENCY;
+			}
+			if (upgrade_status == UDS_PROG_CHECK_DEPENDENCY && rid == 0xFF01)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_WRITE_DIDF199;
+			}
+			break;
+		case SID_34:
+			if (upgrade_status == UDS_PROG_FLASH_DRIVER_REQ_DOWLOAD)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_FLASH_DRIVER_DOWNLOADING;
+				block_len = UdsUtil::can_to_hostl(&msg_buf[2]);
+			}
+			if (upgrade_status == UDS_PROG_APP_REQ_DOWNLOAD)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_APP_DOWNLOADING;
+				block_len = UdsUtil::can_to_hostl(&msg_buf[2]);
 			}
 			break;
 		case SID_36:
-			if (upgrade_step == UDS_PROG_APP_DOWNLOADING)
+			if (upgrade_status == UDS_PROG_FLASH_DRIVER_DOWNLOADING)
 			{
 				recv_sn = msg_buf[1];
 				m_UpdRsp = TRUE;
-				if (total_xmit_len >= total_mem_size)
-					upgrade_step = UDS_PROG_APP_EXIT_DOWNLOAD;
+				if (total_xmit_len >= dri_size)
+					upgrade_status = UDS_PROG_FLASH_DRIVER_EXIT_DOWNLOAD;
+				if (block_sn != recv_sn)
+					Ret = 0x02;
+			}
+
+			if (upgrade_status == UDS_PROG_APP_DOWNLOADING)
+			{
+				recv_sn = msg_buf[1];
+				m_UpdRsp = TRUE;
+				if (total_xmit_len >= app_size)
+					upgrade_status = UDS_PROG_APP_EXIT_DOWNLOAD;
+				if (block_sn != recv_sn)
+					Ret = 0x03;
 			}
 			break;
 		case SID_37:
-			if (upgrade_step == UDS_PROG_APP_EXIT_DOWNLOAD)
+			if (upgrade_status == UDS_PROG_FLASH_DRIVER_EXIT_DOWNLOAD)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_APP_CRC32;
+				upgrade_status = UDS_PROG_FLASH_DRIVER_CRC32;
+			}
+			if (upgrade_status == UDS_PROG_APP_EXIT_DOWNLOAD)
+			{
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_APP_CRC32;
 			}
 			break;
 		case SID_3E:
 			break;
 		case SID_85:
-			if (upgrade_step == UDS_PROG_DTCOFF)
+			if (upgrade_status == UDS_PROG_DTCOFF)
 			{
 				m_UpdRsp = TRUE;
-				upgrade_step = UDS_PROG_DISABLE_RXTX;
+				upgrade_status = UDS_PROG_DISABLE_RXTX;
 			}
 			break;
 		default:
@@ -468,22 +788,30 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 void CUdsClient::do_upgrade(void)
 {
 	UdsCmd CmdNew;
-	if (upgrade_step == UDS_PROG_NONE)
+	if (upgrade_status == UDS_PROG_NONE)
 		return;
 
 	if (m_UpdRsp == FALSE) return;
 	m_UpdRsp = FALSE;
-	switch (upgrade_step)
+	switch (upgrade_status)
 	{
+	    case UDS_PROG_READ_DIDF186:
+			//Push cmd, Read DID 0xF186
+			CmdNew.SID = SID_22;
+			CmdNew.CmdBuf[0] = 0xF1;
+			CmdNew.CmdBuf[1] = 0x86;
+			CmdNew.CmdLen = 2;
+			push_cmd(CmdNew);
+		    break;
 		case UDS_PROG_EXTENDED_SESSION:
-			//Push request cmd, extended Session 
+			//Push cmd, extended Session 
 			CmdNew.SID = SID_10;
 			CmdNew.CmdBuf[0] = 0x03;
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_READ_DIDF187:
-			//Push request cmd, Read DID 0xF187
+			//Push cmd, Read DID 0xF187
 			CmdNew.SID = SID_22;
 			CmdNew.CmdBuf[0] = 0xF1;
 			CmdNew.CmdBuf[1] = 0x87;
@@ -491,7 +819,7 @@ void CUdsClient::do_upgrade(void)
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_DTCOFF:
-			//Push request cmd, Set DTC Off
+			//Push cmd, Set DTC Off
 			CmdNew.SID = SID_85;
 			CmdNew.CmdBuf[0] = 0x02;
 			CmdNew.CmdLen = 1;
@@ -505,27 +833,58 @@ void CUdsClient::do_upgrade(void)
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_PROGRAM_SESSION:
-			//Push request cmd, program Session 
+			//Push cmd, program Session 
 			CmdNew.SID = SID_10;
 			CmdNew.CmdBuf[0] = 0x02;
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_SA:
-			//Push request cmd, request seed
+			//Push cmd, request seed
 			CmdNew.SID = SID_27;
 			CmdNew.CmdBuf[0] = 0x05;
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 
-			//Push request cmd, send key
+			//Push cmd, send key
 			CmdNew.SID = SID_27;
 			CmdNew.CmdBuf[0] = 0x06;
 			CmdNew.CmdLen = 5;
 			push_cmd(CmdNew);
 			break;
+		case UDS_PROG_FLASH_DRIVER_REQ_DOWLOAD:
+			block_sn = 0;
+			total_xmit_len = 0;
+			dri_crc32 = CRC32_INIT;
+
+			CmdNew.SID = SID_34;
+			CmdNew.CmdBuf[0] = 0x00;
+			CmdNew.CmdBuf[1] = 0x44;
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[2], dri_addr);
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[6], dri_size);
+			CmdNew.CmdLen = 10;
+			push_cmd(CmdNew);
+			break;
+		case UDS_PROG_FLASH_DRIVER_DOWNLOADING:
+			UINT read_len;
+			block_sn++;
+			//Push cmd, Transfer Data
+			CmdNew.SID = SID_36;
+			CmdNew.CmdBuf[0] = block_sn;
+			read_len = read_block(pdri_buf, dri_size, &CmdNew.CmdBuf[1], block_len);
+			CmdNew.CmdLen = read_len + 1;
+			push_cmd(CmdNew);
+			total_xmit_len += read_len;
+			dri_crc32 = UdsUtil::crc32_discontinue(dri_crc32, &CmdNew.CmdBuf[1], read_len);
+			break;
+		case UDS_PROG_FLASH_DRIVER_EXIT_DOWNLOAD:
+			//Push cmd, RequestTransferExit
+			CmdNew.SID = SID_37;
+			CmdNew.CmdLen = 0;
+			push_cmd(CmdNew);
+			break;
 		case UDS_PROG_FLASH_DRIVER_CRC32:
-			//Push Routine cmd, Check routine
+			//Push cmd, Check routine
 			CmdNew.SID = SID_31;
 			CmdNew.CmdBuf[0] = 0x01;
 			CmdNew.CmdBuf[1] = 0xF0;
@@ -535,37 +894,50 @@ void CUdsClient::do_upgrade(void)
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_ERASE_MEMORY:
-			//Push Routine cmd, Erase memory
+			//Push cmd, Erase memory
 			CmdNew.SID = SID_31;
 			CmdNew.CmdBuf[0] = 0x01;
 			CmdNew.CmdBuf[1] = 0xFF;
 			CmdNew.CmdBuf[2] = 0x00;
 			CmdNew.CmdBuf[3] = 0x44;
-			UdsUtil::host_to_canl(&CmdNew.CmdBuf[4], mem_addr);
-			UdsUtil::host_to_canl(&CmdNew.CmdBuf[8], mem_size);
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[4], app_addr);
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[8], app_size);
 			CmdNew.CmdLen = 12;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_APP_REQ_DOWNLOAD:
+			block_sn = 0;
+			total_xmit_len = 0;
+			app_crc32 = CRC32_INIT;
 			//Push cmd, Request Download
 			CmdNew.SID = SID_34;
 			CmdNew.CmdBuf[0] = 0x00;
 			CmdNew.CmdBuf[1] = 0x44;
-			UdsUtil::host_to_canl(&CmdNew.CmdBuf[2], mem_addr);
-			UdsUtil::host_to_canl(&CmdNew.CmdBuf[6], mem_size);
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[2], app_addr);
+			UdsUtil::host_to_canl(&CmdNew.CmdBuf[6], app_size);
 			CmdNew.CmdLen = 10;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_APP_DOWNLOADING:
 		{
 			UINT read_len;
+			block_sn++;
 			//Push cmd, Transfer Data
 			CmdNew.SID = SID_36;
 			CmdNew.CmdBuf[0] = block_sn;
-			//block_len = app_data_read(&CmdNew.CmdBuf[1], block_len);
-			CmdNew.CmdLen = block_len + 2;
+			memset(&CmdNew.CmdBuf[1], 0, block_len);
+			read_len = read_block(papp_buf, app_size, &CmdNew.CmdBuf[1], block_len);
+			CmdNew.CmdLen = read_len + 1;
 			push_cmd(CmdNew);
+			total_xmit_len += read_len;
+			app_crc32 = UdsUtil::crc32_discontinue(app_crc32, &CmdNew.CmdBuf[1], read_len);
 		}
+			break;
+		case UDS_PROG_APP_EXIT_DOWNLOAD:
+			//Push request cmd, RequestTransferExit
+			CmdNew.SID = SID_37;
+			CmdNew.CmdLen = 0;
+			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_APP_CRC32:
 			//Push Routine cmd, Check routine
@@ -597,34 +969,78 @@ void CUdsClient::do_upgrade(void)
 			dlg->UdsClient.push_cmd(CmdNew);
 			break;
 		}
+#endif
+
 		case UDS_PROG_WRITE_DIDF199:
 		{
 			CmdNew.SID = SID_2E;
 			CmdNew.CmdBuf[0] = 0xF1;
-			CmdNew.CmdBuf[1] = 0x98;
-			memcpy(&CmdNew.CmdBuf[2], tester_sn, 10);
-			CmdNew.CmdLen = 12;
-			dlg->UdsClient.push_cmd(CmdNew);
+			CmdNew.CmdBuf[1] = 0x99;
+			CmdNew.CmdBuf[2] = 0x17;
+			CmdNew.CmdBuf[3] = 0x05;
+			CmdNew.CmdBuf[4] = 0x17;
+			CmdNew.CmdLen = 5;
+			push_cmd(CmdNew);
 			break;
 		}
 		case UDS_PROG_ECU_RESET:
 			break;
-#endif
 		case UDS_PROG_NONE:
 		default:
 			break;
 	}
+
+	/*0-7 8-16 17-20 21-94 95-100 */
+	if (upgrade_status < UDS_PROG_FLASH_DRIVER_DOWNLOADING)
+	    curre_step = upgrade_status;
+	if (upgrade_status == UDS_PROG_FLASH_DRIVER_DOWNLOADING)
+		curre_step = UDS_PROG_FLASH_DRIVER_DOWNLOADING + (8 * total_xmit_len / dri_size);
+	if (upgrade_status > UDS_PROG_FLASH_DRIVER_DOWNLOADING && upgrade_status < UDS_PROG_APP_DOWNLOADING)
+		curre_step = upgrade_status + 8;
+	if (upgrade_status == UDS_PROG_APP_DOWNLOADING)
+		curre_step = 21 + (73 * total_xmit_len / app_size);
+	if (upgrade_status > UDS_PROG_APP_DOWNLOADING)
+		curre_step = upgrade_status + 81;
 }
+
+/**
+* do_entboot - try to enter bootloader(program session)
+*
+* @void  :
+*
+* returns:
+*     void
+*/
+void CUdsClient::do_entboot(void)
+{
+	if (m_EntBoot > 0)
+	{
+		m_EntBoot--;
+		if (m_EntBoot % 10) return;
+		UdsCmd m_CmdNow;
+		m_CmdNow.SID = 0x10;
+		m_CmdNow.CmdBuf[0] = 0x03;
+		m_CmdNow.CmdLen = 1;
+		request(m_CmdNow.SID, m_CmdNow.CmdBuf, m_CmdNow.CmdLen);
+
+		m_CmdNow.SID = 0x10;
+		m_CmdNow.CmdBuf[0] = 0x02;
+		m_CmdNow.CmdLen = 1;
+		request(m_CmdNow.SID, m_CmdNow.CmdBuf, m_CmdNow.CmdLen);
+	}
+
+}
+
 /*******************************************************************************
 Function  Definition - common
 *******************************************************************************/
 
 void CUdsClient::ZTai_UDS_Send(BYTE CanData[], BYTE CanDlc)
 {
+	UINT i;
 	VCI_CAN_OBJ SendObj[1];
 
 	int FrameFormat, FrameType;
-	UINT i;
 
 	FrameFormat = FRMFMT_STD;
 	FrameType   = FRMTYP_DAT;
@@ -680,7 +1096,7 @@ BYTE CUdsClient::main_loop(void)
 		m_ReqSid = 0;
 		m_UpdRsp = 0;
 		/* Stop upgrade */
-		upgrade_step = UDS_PROG_NONE;
+		upgrade_status = UDS_PROG_NONE;
 		ret |= RET_TIMOUT_P2;
 	}
 	if (uds_timer_run(UDS_TIMER_P2client_x) < 0)
@@ -689,35 +1105,29 @@ BYTE CUdsClient::main_loop(void)
 		m_ReqSid = 0;
 		m_UpdRsp = 0;
 		/* Stop upgrade */
-		upgrade_step = UDS_PROG_NONE;
+		upgrade_status = UDS_PROG_NONE;
 		ret |= RET_TIMOUT_P2_x;
 	}
+	/* Handle uds upgrade */
+	do_upgrade();
+
 	/* Handle Cmd list */
 	do_cmdlist();
+	/* Try enter bootloader */
+	do_entboot();
 
 	if (do_response(RspData, RspDlc) != 0)
 	{
 		uds_timer_stop(UDS_TIMER_S3client);
 		ret |= RET_RESPONSE;
 	}
-	if (upd_ticks >= TIMOUT_UPGRAD_MS)
-	{
-		upd_ticks = 0;
-		/* Handle uds upgrade */
-		do_upgrade();
-	}
-	else
-	{
-		upd_ticks++;
-	}
-	if (upgrade_step == UDS_PROG_NONE)
-	{
-		if (m_FileOpen == TRUE) {
-			myFile.Close();
-			m_FileOpen = FALSE;
-		}
-	}
 
+	if (upgrade_status == UDS_PROG_ENUM_MAX)
+	{
+		upgrade_status = UDS_PROG_NONE;
+		ret |= RET_DONE;
+
+	}
 	return ret;
 }
 
@@ -750,10 +1160,10 @@ UINT CUdsClient::get_rsp(BYTE DataBuf[], UINT BufLen)
 {
 	/**
 	DWORD Ticks;
-	Ticks = GetTickCount();
+	Ticks = timeGetTime();
 	while (GetRsp == FALSE)
 	{
-		if ((GetTickCount() - Ticks) >= 2000)
+		if ((timeGetTime() - Ticks) >= 2000)
 			break;
 		Sleep(200);
 	}*/
@@ -796,23 +1206,43 @@ void CUdsClient::push_cmd(UdsCmd Cmd)
 */
 UINT CUdsClient::start_upgrade(void)
 {
-	if (upgrade_step != UDS_PROG_NONE)
+	if (upgrade_status != UDS_PROG_NONE)
 		return 1;
 	m_UpdRsp = TRUE;
-	upgrade_step = UDS_PROG_EXTENDED_SESSION;
-	upd_ticks = 0;
+	upgrade_status = UDS_PROG_READ_DIDF186;
+
+	curre_step = 0;
+	m_EntBoot = 0;
 	return 0;
 }
 
 /**
-* open_upgrade_file - Open the upgrade file
+* start_upgrade - start upgrade task
 *
 * @void  :
 *
 * returns:
 *     void
 */
-UINT CUdsClient::open_upgrade_file(CString FilePath)
+UINT CUdsClient::stop_upgrade(void)
+{
+	m_UpdRsp = FALSE;
+	curre_step = 0;
+	upgrade_status = UDS_PROG_NONE;
+	uds_timer_stop(UDS_TIMER_S3client);
+
+	return 0;
+}
+
+/**
+* open_mcuapp_file - Open the upgrade file
+*
+* @void  :
+*
+* returns:
+*     void
+*/
+UINT CUdsClient::open_mcuapp_file(CString FilePath)
 {
 
 	CFileException fileException;
@@ -820,16 +1250,48 @@ UINT CUdsClient::open_upgrade_file(CString FilePath)
 	if (myFile.Open(FilePath, (CFile::typeText | CFile::modeReadWrite), &fileException))
 	{
 		myFile.SeekToBegin();
+		read_memaddr(app_addr, app_size);
 
-		CString str;
-		myFile.ReadString(str);
-		AfxMessageBox(str);
+		if (papp_buf != NULL)
+			delete[] papp_buf;
+		papp_buf = new BYTE[app_size + DATA_BUF_LEN];
 
-		m_FileOpen = TRUE;
+		myFile.SeekToBegin();
+		read_memdata(papp_buf, app_addr, app_size);
+
+		myFile.Close();
+
 	}
-	else
+
+	return fileException.m_cause;
+
+}
+
+/**
+* open_driver_file - Open the driver file
+*
+* @void  :
+*
+* returns:
+*     void
+*/
+UINT CUdsClient::open_driver_file(CString FilePath)
+{
+
+	CFileException fileException;
+
+	if (myFile.Open(FilePath, (CFile::typeText | CFile::modeReadWrite), &fileException))
 	{
-		m_FileOpen = FALSE;
+		myFile.SeekToBegin();
+		read_memaddr(dri_addr, dri_size);
+		
+		if (pdri_buf != NULL)
+			delete[] pdri_buf;
+		pdri_buf = new BYTE[dri_size + DATA_BUF_LEN];
+
+		myFile.SeekToBegin();
+		read_memdata(pdri_buf, dri_addr, dri_size);
+		myFile.Close();
 	}
 
 	return fileException.m_cause;

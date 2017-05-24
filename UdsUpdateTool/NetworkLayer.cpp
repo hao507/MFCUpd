@@ -9,7 +9,7 @@
 #include "stdafx.h"
 #include "NetworkLayerPrivate.h"
 #include "NetworkLayer.h"
-
+#include "timeapi.h"
 
 /*******************************************************************************
 Type Definition
@@ -63,11 +63,20 @@ void CUdsNetwork::nt_timer_start(BYTE num)
 	if (num >= TIMER_CNT) return;
 
 	if (num == TIMER_N_CR)
-		nt_timer[TIMER_N_CR] = TIMEOUT_N_CR;
+	{
+		nt_timer[TIMER_N_CR] = timeGetTime();
+		NT_TIMOUT[TIMER_N_CR] = TIMEOUT_N_CR;
+	}
 	if (num == TIMER_N_BS)
-		nt_timer[TIMER_N_BS] = TIMEOUT_N_BS;
+	{
+		nt_timer[TIMER_N_BS] = timeGetTime();
+		NT_TIMOUT[TIMER_N_BS] = TIMEOUT_N_BS;
+	}
 	if (num == TIMER_STmin)
-		nt_timer[TIMER_STmin] = g_rfc_stmin;
+	{
+		nt_timer[TIMER_STmin] = timeGetTime();
+		NT_TIMOUT[TIMER_STmin] = g_rfc_stmin;
+	}
 }
 
 void CUdsNetwork::nt_timer_start_wv(BYTE num, UINT value)
@@ -75,11 +84,20 @@ void CUdsNetwork::nt_timer_start_wv(BYTE num, UINT value)
 	if (num >= TIMER_CNT) return;
 
 	if (num == TIMER_N_CR)
-		nt_timer[TIMER_N_CR] = value;
+	{
+		nt_timer[TIMER_N_CR] = timeGetTime();
+		NT_TIMOUT[TIMER_N_CR] = value;
+	}
 	if (num == TIMER_N_BS)
-		nt_timer[TIMER_N_BS] = value;
+	{
+		nt_timer[TIMER_N_BS] = timeGetTime();
+		NT_TIMOUT[TIMER_N_BS] = value;
+	}
 	if (num == TIMER_STmin)
-		nt_timer[TIMER_STmin] = value;
+	{
+		nt_timer[TIMER_STmin] = timeGetTime();
+		NT_TIMOUT[TIMER_STmin] = value;
+	}
 }
 
 void CUdsNetwork::nt_timer_stop(BYTE num)
@@ -105,16 +123,19 @@ int CUdsNetwork::nt_timer_run(BYTE num)
 	{
 		return 0;
 	}
-	else if (nt_timer[num] == 1)
-	{
-		nt_timer[num] = 0;
-		return -1;
-	}
 	else
 	{
-		/* if (nt_timer[num] > 1) */
-		nt_timer[num]--;
-		return 1;
+		DWORD Tikcs = timeGetTime();
+
+		if (Tikcs - nt_timer[num] >= NT_TIMOUT[num])
+		{
+			nt_timer[num] = 0;
+			return -1;
+		}
+		else
+		{
+			return 1;
+		}
 	}
 
 }

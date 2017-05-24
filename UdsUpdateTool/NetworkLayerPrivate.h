@@ -90,7 +90,7 @@ typedef enum __NETWORK_FLOW_STATUS__
 #define NT_XMIT_FC_BS               (0)
 #define NT_XMIT_FC_STMIN            (0x0A)       /* 0x00-0x7f, range:0ms-127ms */
 #define NT_WFTmax                   (10)
-#define TIMEOUT_N_CR                (150)        /* 150 ms */
-#define TIMEOUT_N_BS                (75)        /* 75 ms */
+#define TIMEOUT_N_CR                (300)        /* 150 ms, change to 300ms*/
+#define TIMEOUT_N_BS                (300)        /* 75 ms,  change to 300ms*/
 
 /****************EOF****************/

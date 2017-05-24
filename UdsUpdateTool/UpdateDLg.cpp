@@ -80,19 +80,5 @@ void CUpdateDLg::OnBnClickedCheckResetUpdate()
 void CUpdateDLg::OnOK()
 {
 	// TODO: 在此添加专用代码和/或调用基类
-	UINT Ret;
-	CString str;
-	Ret = pClient->open_upgrade_file(m_CstrPath);
-	if (Ret != 0)
-	{
-		str.Format(_T(">>Upgrade file: \r\n %s \r\n Open Failed,error=%u/n"), m_CstrPath, Ret);
-		pMainPage->PrintLog(0, str);
-		CDialog::OnCancel();
-	}
-	else
-	{
-		str.Format(_T(">>Upgrade file: \r\n %s \r\n Open Success,error=%u/n"), m_CstrPath, Ret);
-		pMainPage->PrintLog(0, str);
-		CDialogEx::OnOK();
-	}
+	CDialogEx::OnOK();
 }

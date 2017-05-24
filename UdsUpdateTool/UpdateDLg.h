@@ -1,6 +1,5 @@
 #pragma once
-#include "UdsClient.h"
-#include "MainPageDlg.h"
+
 // CStartUpdateDLg ¶Ô»°¿ò
 
 class CUpdateDLg : public CDialogEx
@@ -22,10 +21,6 @@ protected:
 	DECLARE_MESSAGE_MAP()
 private:
 	CEdit   m_EditPath;
-
-public:
-	CUdsClient *pClient;
-	CMainPageDlg *pMainPage;
 
 public:
 	CString m_CstrPath;

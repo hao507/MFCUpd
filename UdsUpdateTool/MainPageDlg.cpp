@@ -8,7 +8,7 @@
 #include "ControlCAN.h"
 #include "afxdialogex.h"
 
-
+#define DISP_TIME
 // CMainPageDlg 对话框
 
 IMPLEMENT_DYNAMIC(CMainPageDlg, CDialogEx)
@@ -56,8 +56,11 @@ BOOL CMainPageDlg::OnInitDialog()
 	PrintLog(0, _T(">>"));
 
 	//Init Update Progress
+
 	m_ProgUpdate.SetRange(0, 100);
+	m_ProgUpdate.SetStep(1);
 	m_ProgUpdate.StepIt();
+
 
 	//Recieve Lst
 	m_RecvList.SetExtendedStyle(LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
@@ -72,6 +75,11 @@ BOOL CMainPageDlg::OnInitDialog()
 	m_RecvList.SetColumnWidth(3, 40);
 	m_RecvList.InsertColumn(4, _T("Data"));
 	m_RecvList.SetColumnWidth(4, 150);
+
+#ifdef DISP_TIME
+	m_RecvList.InsertColumn(5, _T("TimeStamp"));
+	m_RecvList.SetColumnWidth(5, 50);
+#endif
 
 	return TRUE;  // return TRUE unless you set the focus to a control
 				  // 异常: OCX 属性页应返回 FALSE

@@ -27,10 +27,10 @@ private:
 	CString m_Cstrprint;
 	CEdit   m_Editprint;
 
-	CProgressCtrl m_ProgUpdate;
-
 	CCriticalSection m_PrintMutex;
 	INT nextrow = 0;
+public:
+	CProgressCtrl m_ProgUpdate;
 public:
 	virtual BOOL OnInitDialog();
 	void InsertItem(INT Dire, VCI_CAN_OBJ * pCanObj);

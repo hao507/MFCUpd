@@ -64,7 +64,11 @@ public:
 	afx_msg void OnMenuClosdev();
 	afx_msg void OnMenuStartUpdate();
 	afx_msg void OnMenuStopUpdate();
+	afx_msg void OnMenuRddriv();
 	afx_msg void OnMenuEcuReset();
 	afx_msg void OnMenuSessionStd();
 	afx_msg void OnMenuSessionEol();
+	afx_msg void OnMenuRdapp();
+	afx_msg void OnMenuRddid();
+	afx_msg void OnMenuEnterIap();
 };

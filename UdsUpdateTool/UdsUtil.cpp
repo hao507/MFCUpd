@@ -12,22 +12,24 @@ UdsUtil::~UdsUtil()
 }
 
 
-LONG UdsUtil::str2char(CString str, PBYTE ptr)
+INT UdsUtil::str2char(CString str, PBYTE ptr, UINT dst_len)
 
 {
 
-	if (ptr == NULL) return 0;
+	if (ptr == NULL || str.IsEmpty() == TRUE) return 0;
 
 #ifdef _UNICODE
 
-	LONG len;
+	INT len;
 
 	len = WideCharToMultiByte(CP_ACP, 0, str, -1, NULL, 0, NULL, NULL);
 
-	WideCharToMultiByte(CP_ACP, 0, str, -1, (LPSTR)ptr, len + 1, NULL, NULL);
-
+	if (dst_len > len)
+		WideCharToMultiByte(CP_ACP, 0, str, -1, (LPSTR)ptr, len + 1, NULL, NULL);
+	else
+		len = 0;
 #else
-	LONG len;
+	INT len;
 
 	len = str.GetAllocLength();
 
@@ -218,4 +220,123 @@ UdsUtil::host_to_canl(BYTE buf[], UINT val)
 	buf[3] = (val >> 0) & 0xff;
 
 	return 0;
+}
+
+/**
+* can_to_hostl - transmit  can-net endian buffer to long or short int
+*
+* @buf: ther buffer to be transformed
+*
+* returns:
+*     transformed value
+*/
+UINT
+UdsUtil::can_to_hostl(BYTE buf[])
+{
+	UINT val;
+	if (buf == NULL) return 0;
+
+	val = 0;
+	val |= ((UINT)buf[0]) << 24;
+	val |= ((UINT)buf[1]) << 16;
+	val |= ((UINT)buf[2]) << 8;
+	val |= ((UINT)buf[3]) << 0;
+
+	return val;
+}
+
+/*two ascii code conversion to a hex*/
+void UdsUtil::ascii_to_hex(unsigned char *src_buff, unsigned char *dst_buff, int src_len)
+{
+	int i;
+	int offset;
+
+	for (i = 0; i<src_len; i++)
+	{
+		if ((0x30 <= src_buff[i]) && (src_buff[i] <= 0x39))	/*0-9*/
+			offset = 0x30;
+		else if ((0x41 <= src_buff[i]) && (src_buff[i] <= 0x46))	/*A-F*/
+			offset = 0x37;
+		else if ((0x61 <= src_buff[i]) && (src_buff[i] <= 0x66))	/*a-f*/
+			offset = 0x57;
+		else
+			offset = 0;
+
+		if (!(i % 2))
+			dst_buff[i / 2] = src_buff[i] - offset;
+		else
+			dst_buff[i / 2] = (dst_buff[i / 2] << 4) | (src_buff[i] - offset);
+	}
+}
+
+/**
+* crc32_continue - calculate crc32 once time
+*
+* @data: start position to be transformed
+* @len :
+* returns:
+*     transformed value
+*/
+UINT UdsUtil::crc32_continue(BYTE *data, UINT len)
+{
+	UINT result;
+	UINT i, j;
+	BYTE  octet;
+
+	result = ~CRC32_INIT;
+
+	for (i = 0; i<len; i++)
+	{
+		octet = *(data++);
+		for (j = 0; j<8; j++)
+		{
+			if ((octet >> 7) ^ (result >> 31))
+			{
+				result = (result << 1) ^ CRC32_POLY;
+			}
+			else
+			{
+				result = (result << 1);
+			}
+			octet <<= 1;
+		}
+	}
+
+	return ~result;             /* The complement of the remainder */
+}
+
+/**
+* crc32_discontinue - calculate crc32 discontinue
+*
+* @data: start position to be transformed
+*
+* returns:
+*     transformed value
+*/
+UINT UdsUtil::crc32_discontinue(UINT org_rst, BYTE *data, UINT len)
+{
+	UINT result;
+	UINT i, j;
+	BYTE octet;
+
+	result = ~org_rst;
+
+	for (i = 0; i<len; i++)
+	{
+		octet = *(data++);
+		for (j = 0; j<8; j++)
+		{
+			if ((octet >> 7) ^ (result >> 31))
+			{
+				result = (result << 1) ^ CRC32_POLY;
+			}
+			else
+			{
+				result = (result << 1);
+			}
+			octet <<= 1;
+		}
+	}
+
+	return ~result;             /* The complement of the remainder */
 }

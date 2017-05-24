@@ -59,6 +59,7 @@ private:
 	BOOL g_wait_fc;
 
 	UINT nt_timer[TIMER_CNT];
+	DWORD NT_TIMOUT[TIMER_CNT];
 
 	BYTE g_rfc_stmin;    /* received flowcontrol SeparationTime */
 	BYTE g_rfc_bs;       /* received flowcontrol block size */

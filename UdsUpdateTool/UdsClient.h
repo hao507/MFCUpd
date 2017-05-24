@@ -122,7 +122,12 @@ typedef struct
 #define RET_TIMOUT_P2    0x02
 #define RET_TIMOUT_P2_x  0x04
 #define RET_RESPONSE     0x08
+#define RET_DONE         0x10
 
+
+/* for read hex file */
+#define RECORD_BUF_LEN	200
+#define DATA_BUF_LEN	200
 /*******************************************************************************
 Function  Definition
 *******************************************************************************/
@@ -134,6 +139,11 @@ public:
 	~CUdsClient();
 
 private:
+	/* uds user layer timer */
+	DWORD uds_timer[UDS_TIMER_CNT];
+	DWORD TIMOUT_VALUE[UDS_TIMER_CNT];
+	BYTE  uds_timeo[UDS_TIMER_CNT];
+
 	BOOL m_FunReq; /* Functional communication */
 	BYTE m_ReqSid;
 	BYTE m_ReqSubfunction;
@@ -145,12 +155,29 @@ private:
 	UINT RspDlc;
 
 	CStdioFile myFile;
-	BOOL m_FileOpen;
 
-	/* uds user layer timer */
-	DWORD uds_timer[UDS_TIMER_CNT];
-	DWORD TIMOUT_VALUE[UDS_TIMER_CNT];
-	BYTE  uds_timeo[UDS_TIMER_CNT];
+	/* for upgrade statu management */
+	uds_upgrade_t upgrade_status;
+
+	LPBYTE pdri_buf;
+	UINT dri_crc32;
+	UINT dri_addr;
+	UINT dri_size;
+
+	LPBYTE papp_buf;
+	UINT app_crc32;
+	UINT app_addr;
+	UINT app_size;
+
+	BYTE recv_sn;
+	UINT total_xmit_len;
+
+	UINT block_len;
+	BYTE block_sn;
+	BYTE tester_sn[10];
+	BYTE ecu_part_num[15];
+	BYTE cur_seesion;
+
 public:
 	UINT m_Fucid = FUNCID;
 	UINT m_Phyid = PHYSID;
@@ -159,33 +186,17 @@ public:
 	BYTE n_Result;
 	BOOL n_ResultErr;
 	CArray<UdsCmd> m_CmdList;
-	UdsCmd m_CmdNow;
 	BOOL m_GetRsp;
-	BOOL m_ExpRsp; /* Expect  a reponse */
 
 	BYTE m_RspBuf[4];
 	BYTE m_RspNrc;
 
 	UINT m_CanChnl;
 
+	UINT total_step;
+	UINT curre_step;
 
-	/* for upgrade */
-	uds_upgrade_t upgrade_step;
-
-	UINT dri_crc32;
-	UINT app_crc32;
-	UINT mem_addr;
-	UINT mem_size;
-	UINT block_len;
-	BYTE block_sn;
-	BYTE tester_sn[10] = { 0 };
-	BYTE ecu_part_num[15];
-	UINT upd_ticks;
-
-	BYTE recv_sn;
-	UINT total_mem_size;
-	UINT total_xmit_len;
-
+	UINT m_EntBoot;
 private:
 	void uds_timer_start(BYTE num);
 	void uds_timer_stop(BYTE num);
@@ -195,6 +206,11 @@ private:
 	void do_cmdlist(void);
 	void do_upgrade(void);
 	BYTE do_response(BYTE msg_buf[], WORD msg_dlc);
+	void do_entboot(void);
+	INT  read_aline(unsigned char *dst_buff, UINT buff_len);
+	INT  read_memaddr(UINT &mem_addr, UINT &mem_size);
+	INT  read_memdata(LPBYTE mem_buf, UINT mem_addr, UINT mem_size);
+	int  read_block(const LPBYTE mem_buff, UINT mem_size, unsigned char *dst_buff, UINT block_len);
 protected:
 	void ZTai_UDS_Send(BYTE CanData[], BYTE CanDlc);
 	void N_USData_ffindication(WORD msg_dlc);
@@ -206,5 +222,7 @@ public:
 	UINT get_rsp(BYTE DataBuf[], UINT BufLen);
 	void push_cmd(UdsCmd CmdNew);
 	UINT start_upgrade(void);
-	UINT open_upgrade_file(CString FilePath);
+	UINT stop_upgrade(void);
+	UINT open_mcuapp_file(CString FilePath);
+	UINT open_driver_file(CString FilePath);
 };

@@ -78,10 +78,14 @@ BEGIN_MESSAGE_MAP(CUdsUpdateToolDlg, CDialogEx)
 	ON_COMMAND(ID_MENU_OPENDEV, &CUdsUpdateToolDlg::OnMenuOpendev)
 	ON_COMMAND(ID_MENU_START_UPDATE, &CUdsUpdateToolDlg::OnMenuStartUpdate)
 	ON_COMMAND(ID_MENU_STOP_UPDATE,  &CUdsUpdateToolDlg::OnMenuStopUpdate)
+	ON_COMMAND(ID_MENU_RDDRIV, &CUdsUpdateToolDlg::OnMenuRddriv)
 	ON_COMMAND(ID_MENU_CLOSDEV, &CUdsUpdateToolDlg::OnMenuClosdev)
 	ON_COMMAND(ID_MENU_ECU_RESET, &CUdsUpdateToolDlg::OnMenuEcuReset)
 	ON_COMMAND(ID_MENU_SESSION_STD, &CUdsUpdateToolDlg::OnMenuSessionStd)
 	ON_COMMAND(ID_MENU_SESSION_EOL, &CUdsUpdateToolDlg::OnMenuSessionEol)
+	ON_COMMAND(ID_MENU_RDAPP, &CUdsUpdateToolDlg::OnMenuRdapp)
+	ON_COMMAND(ID_MENU_RDDID, &CUdsUpdateToolDlg::OnMenuRddid)
+	ON_COMMAND(ID_MENU_ENTER_IAP, &CUdsUpdateToolDlg::OnMenuEnterIap)
 END_MESSAGE_MAP()
 
 
@@ -152,9 +156,7 @@ BOOL CUdsUpdateToolDlg::OnInitDialog()
 	m_CurSelTab = 0;
 
 	//开启接收线程
-	AfxBeginThread(ReceiveThread, 0);
-	//开启UDS线程
-	AfxBeginThread(UdsMainThread, &UdsClient);
+	AfxBeginThread(ReceiveThread, &UdsClient);
 
 	//Create Event
 	hUpdateEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -243,13 +245,14 @@ INT CUdsUpdateToolDlg::TransmitCanmsg(VCI_CAN_OBJ *SendObj)
 
 UINT CUdsUpdateToolDlg::ReceiveThread(LPVOID v)
 {
+	BYTE main_ret;
+	CString str;
+	CUdsClient *pObj = (CUdsClient *)v;
 	CUdsUpdateToolDlg *dlg = (CUdsUpdateToolDlg*)AfxGetApp()->GetMainWnd();
 
 	INT NumValue;
 	INT num = 0;
 	VCI_CAN_OBJ pCanObj[200];
-
-	CString str;
 
 	DWORD ReceivedID;
 
@@ -274,7 +277,18 @@ UINT CUdsUpdateToolDlg::ReceiveThread(LPVOID v)
 			dlg->m_MainPage.PrintLog(0, str);
 		}
 
-		Sleep(5);
+
+		main_ret = pObj->main_loop();
+		if (main_ret != 0) {
+			str.Format(_T(">>uds main loop. error %d"), main_ret);
+			dlg->m_MainPage.PrintLog(0, str);
+		}
+
+
+		if (dlg->m_MainPage.m_ProgUpdate.GetPos() < dlg->UdsClient.curre_step)
+			dlg->m_MainPage.m_ProgUpdate.StepIt();
+
+		Sleep(1);
 	}
 
 	return 1;
@@ -333,32 +347,59 @@ void CUdsUpdateToolDlg::OnMenuClosdev()
 void CUdsUpdateToolDlg::OnMenuStartUpdate()
 {
 	// TODO: 在此添加命令处理程序代码
-	CUpdateDLg Dlg;
-	Dlg.pClient = &UdsClient;
-	Dlg.pMainPage = &m_MainPage;
-	INT nRet = Dlg.DoModal();
-	if (nRet == IDOK)
-	{
-		if (UdsClient.start_upgrade() == 0) {
-			m_MainPage.PrintLog(0, _T(">>Start Update MCU"));
-		}
-		else {
-			m_MainPage.PrintLog(0, _T(">>Update Task Is Already Running"));
-		}
+	if (UdsClient.start_upgrade() == 0) {
+		m_MainPage.PrintLog(0, _T(">>Start Update MCU Success"));
+		m_MainPage.m_ProgUpdate.SetPos(0);
 	}
-	else
-	{
-		m_MainPage.PrintLog(0, _T(">>Start Update MCU Failed"));
+	else {
+		m_MainPage.PrintLog(0, _T(">>Update MCU Task Is Already Running"));
 	}
-
 }
 
 
 void CUdsUpdateToolDlg::OnMenuStopUpdate()
 {
 	// TODO: 在此添加命令处理程序代码
+	UdsClient.stop_upgrade();
 }
 
+void CUdsUpdateToolDlg::OnMenuRddriv()
+{
+	// TODO: 在此添加命令处理程序代码
+	CUpdateDLg Dlg;
+	INT nRet = Dlg.DoModal();
+	if (nRet == IDOK)
+	{
+		UINT Ret;
+		CString str;
+		Ret = UdsClient.open_driver_file(Dlg.m_CstrPath);
+		str.Format(_T(">>Open Flash Driver File %s: \r\n %s \r\n,error=%u/n"), (Ret == 0) ? _T("Success") : _T("Failed"), Dlg.m_CstrPath, Ret);
+		m_MainPage.PrintLog(0, str);
+	}
+	else
+	{
+		m_MainPage.PrintLog(0, _T(">>Open Flash Driver File Cancelled"));
+	}
+}
+
+void CUdsUpdateToolDlg::OnMenuRdapp()
+{
+	// TODO: 在此添加命令处理程序代码
+	CUpdateDLg Dlg;
+	INT nRet = Dlg.DoModal();
+	if (nRet == IDOK)
+	{
+		UINT Ret;
+		CString str;
+		Ret = UdsClient.open_mcuapp_file(Dlg.m_CstrPath);
+		str.Format(_T(">>Open Mcuapp file %s: \r\n %s \r\n,error=%u/n"), (Ret == 0) ? _T("Success") : _T("Failed"), Dlg.m_CstrPath, Ret);
+		m_MainPage.PrintLog(0, str);
+	}
+	else
+	{
+		m_MainPage.PrintLog(0, _T(">>Open Mcuapp File Cancelled"));
+	}
+}
 
 
 void CUdsUpdateToolDlg::OnMenuEcuReset()
@@ -413,4 +454,30 @@ void CUdsUpdateToolDlg::OnMenuSessionEol()
 	CmdNew.CmdBuf[0] = 0x03;
 	CmdNew.CmdLen = 1;
 	UdsClient.push_cmd(CmdNew);
+}
+
+
+
+void CUdsUpdateToolDlg::OnMenuRddid()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+	CmdNew.SID = SID_22;
+	CmdNew.CmdBuf[0] = 0xF1;
+	CmdNew.CmdBuf[1] = 0x86;
+	CmdNew.CmdLen = 2;
+	UdsClient.push_cmd(CmdNew);
+
+	CmdNew.SID = SID_22;
+	CmdNew.CmdBuf[0] = 0xF1;
+	CmdNew.CmdBuf[1] = 0x99;
+	CmdNew.CmdLen = 2;
+	UdsClient.push_cmd(CmdNew);
+}
+
+
+void CUdsUpdateToolDlg::OnMenuEnterIap()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsClient.m_EntBoot = 100;
 }

@@ -89,10 +89,10 @@ void COpenDevDlg::OnOK()
 	Index = m_combbaud.GetCurSel();
 	m_combbaud.GetLBText(Index, baudrate);//取得所选的字符串，并存放在baudrate里面
 
-	temp_len = UdsUtil::str2char(m_EditBgnid, temp_buf) - 1;
+	temp_len = UdsUtil::str2char(m_EditBgnid, temp_buf, 50) - 1;
 	UdsUtil::str2HEX(temp_buf, id_bgn);
 
-	temp_len = UdsUtil::str2char(m_EditEndid, temp_buf) - 1;
+	temp_len = UdsUtil::str2char(m_EditEndid, temp_buf, 50) - 1;
 	UdsUtil::str2HEX(temp_buf, id_end);
 
 
