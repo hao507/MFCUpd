@@ -86,6 +86,7 @@ BEGIN_MESSAGE_MAP(CUdsUpdateToolDlg, CDialogEx)
 	ON_COMMAND(ID_MENU_RDAPP, &CUdsUpdateToolDlg::OnMenuRdapp)
 	ON_COMMAND(ID_MENU_RDDID, &CUdsUpdateToolDlg::OnMenuRddid)
 	ON_COMMAND(ID_MENU_ENTER_IAP, &CUdsUpdateToolDlg::OnMenuEnterIap)
+	ON_COMMAND(ID_MENU_WRDID, &CUdsUpdateToolDlg::OnMenuWrdid)
 END_MESSAGE_MAP()
 
 
@@ -470,6 +471,12 @@ void CUdsUpdateToolDlg::OnMenuRddid()
 
 	CmdNew.SID = SID_22;
 	CmdNew.CmdBuf[0] = 0xF1;
+	CmdNew.CmdBuf[1] = 0x98;
+	CmdNew.CmdLen = 2;
+	UdsClient.push_cmd(CmdNew);
+
+	CmdNew.SID = SID_22;
+	CmdNew.CmdBuf[0] = 0xF1;
 	CmdNew.CmdBuf[1] = 0x99;
 	CmdNew.CmdLen = 2;
 	UdsClient.push_cmd(CmdNew);
@@ -480,4 +487,34 @@ void CUdsUpdateToolDlg::OnMenuEnterIap()
 {
 	// TODO: 在此添加命令处理程序代码
 	UdsClient.m_EntBoot = 100;
+}
+
+
+void CUdsUpdateToolDlg::OnMenuWrdid()
+{
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+	SYSTEMTIME   systime;
+	GetLocalTime(&systime);
+
+	//Push request cmd, request seed
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x05;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+
+	//Push request cmd, send key
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x06;
+	CmdNew.CmdLen = 5;
+	UdsClient.push_cmd(CmdNew);
+
+	CmdNew.SID = SID_2E;
+	CmdNew.CmdBuf[0] = 0xF1;
+	CmdNew.CmdBuf[1] = 0x99;
+	CmdNew.CmdBuf[2] = UdsUtil::HEX2BCD(systime.wYear%1000);
+	CmdNew.CmdBuf[3] = UdsUtil::HEX2BCD(systime.wMonth);
+	CmdNew.CmdBuf[4] = UdsUtil::HEX2BCD(systime.wDay);
+	CmdNew.CmdLen = 5;
+	UdsClient.push_cmd(CmdNew);
 }

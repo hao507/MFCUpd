@@ -71,4 +71,5 @@ public:
 	afx_msg void OnMenuRdapp();
 	afx_msg void OnMenuRddid();
 	afx_msg void OnMenuEnterIap();
+	afx_msg void OnMenuWrdid();
 };

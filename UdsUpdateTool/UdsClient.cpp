@@ -99,6 +99,12 @@ void CUdsClient::uds_timer_stop(BYTE num)
 	uds_timer[num] = 0;
 }
 
+void CUdsClient::uds_timer_clear(BYTE num)
+{
+	if (num >= UDS_TIMER_CNT) return;
+
+	uds_timeo[num] = 0;
+}
 /**
 * uds_timer_run - run a uds timer, should be invoked per 1ms
 *
@@ -240,6 +246,17 @@ void CUdsClient::N_USData_indication(BYTE msg_buf[], WORD msg_dlc, n_result_t n_
 		/* have forgotten why do this? */
 		if (m_RspSid == 0x2E)
 			RspData[20] = 0x11;
+
+		if (m_RspSid == 0x27 && (m_RspSubfunction == 0x01 || m_RspSubfunction == 0x05))
+		{
+			m_RspBuf[0] = msg_buf[2];
+			m_RspBuf[1] = msg_buf[3];
+			m_RspBuf[2] = msg_buf[4];
+			m_RspBuf[3] = msg_buf[5];
+		}
+
+		if (m_RspSid == 0x10)
+			m_EntBoot = 0;
 	}
 
 	RspDlc = msg_dlc;
@@ -263,6 +280,9 @@ void CUdsClient::N_USData_confirm(n_result_t n_result)
 	if (n_result == N_OK)
 	{
 		uds_timer_start(UDS_TIMER_P2client);
+		/* Clear UDS_TIMER_P2client_x timeout */
+		uds_timer_clear(UDS_TIMER_P2client_x);
+
 		if (m_FunReq == TRUE)
 		{
 			if (m_ReqSid == SID_10)
@@ -622,7 +642,6 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 	switch (m_RspSid)
 	{
 	    case SID_10:
-			m_EntBoot = 0;
 			if (upgrade_status == UDS_PROG_EXTENDED_SESSION && m_RspSubfunction == UDS_SESSION_EOL)
 			{
 				m_UpdRsp = TRUE;
@@ -632,7 +651,7 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 			{
 				Sleep(1500); /* sleep 1s for sa */
 				m_UpdRsp = TRUE;
-				upgrade_status = UDS_PROG_SA;
+				upgrade_status = UDS_PROG_SA_SEED;
 			}
 			break;
 		case SID_11:
@@ -661,7 +680,7 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 					if (cur_seesion == UDS_SESSION_EOL)
 						upgrade_status = UDS_PROG_READ_DIDF187;
 					if (cur_seesion == UDS_SESSION_PROG)
-						upgrade_status = UDS_PROG_SA;
+						upgrade_status = UDS_PROG_SA_SEED;
 				}
 			}
 
@@ -670,18 +689,16 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 			upgrade_status = UDS_PROG_ENUM_MAX;
 			break;
 		case SID_27:
-			if (upgrade_status == UDS_PROG_SA && m_RspSubfunction == 0x06)
+			if (upgrade_status == UDS_PROG_SA_KEY && m_RspSubfunction == 0x06)
 			{
 				m_UpdRsp = TRUE;
 				upgrade_status = UDS_PROG_FLASH_DRIVER_REQ_DOWLOAD;
 			}
 
-			if (msg_dlc == 6 && (m_RspSubfunction == 0x01 || m_RspSubfunction == 0x05))
+			if (upgrade_status == UDS_PROG_SA_SEED && (m_RspSubfunction == 0x05))
 			{
-				m_RspBuf[0] = msg_buf[2];
-				m_RspBuf[1] = msg_buf[3];
-				m_RspBuf[2] = msg_buf[4];
-				m_RspBuf[3] = msg_buf[5];
+				m_UpdRsp = TRUE;
+				upgrade_status = UDS_PROG_SA_KEY;
 			}
 			break;
 		case SID_28:
@@ -793,6 +810,7 @@ void CUdsClient::do_upgrade(void)
 
 	if (m_UpdRsp == FALSE) return;
 	m_UpdRsp = FALSE;
+	m_FunReq = FALSE;
 	switch (upgrade_status)
 	{
 	    case UDS_PROG_READ_DIDF186:
@@ -805,6 +823,7 @@ void CUdsClient::do_upgrade(void)
 		    break;
 		case UDS_PROG_EXTENDED_SESSION:
 			//Push cmd, extended Session 
+			m_FunReq = TRUE;
 			CmdNew.SID = SID_10;
 			CmdNew.CmdBuf[0] = 0x03;
 			CmdNew.CmdLen = 1;
@@ -820,12 +839,14 @@ void CUdsClient::do_upgrade(void)
 			break;
 		case UDS_PROG_DTCOFF:
 			//Push cmd, Set DTC Off
+			m_FunReq = TRUE;
 			CmdNew.SID = SID_85;
 			CmdNew.CmdBuf[0] = 0x02;
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 			break;
 		case UDS_PROG_DISABLE_RXTX:
+			m_FunReq = TRUE;
 			CmdNew.SID = SID_28;
 			CmdNew.CmdBuf[0] = 0x03;
 			CmdNew.CmdBuf[1] = 0x01;
@@ -839,13 +860,14 @@ void CUdsClient::do_upgrade(void)
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
 			break;
-		case UDS_PROG_SA:
+		case UDS_PROG_SA_SEED:
 			//Push cmd, request seed
 			CmdNew.SID = SID_27;
 			CmdNew.CmdBuf[0] = 0x05;
 			CmdNew.CmdLen = 1;
 			push_cmd(CmdNew);
-
+			break;
+		case UDS_PROG_SA_KEY:
 			//Push cmd, send key
 			CmdNew.SID = SID_27;
 			CmdNew.CmdBuf[0] = 0x06;
@@ -973,12 +995,14 @@ void CUdsClient::do_upgrade(void)
 
 		case UDS_PROG_WRITE_DIDF199:
 		{
+			SYSTEMTIME   systime;
+			GetLocalTime(&systime);
 			CmdNew.SID = SID_2E;
 			CmdNew.CmdBuf[0] = 0xF1;
 			CmdNew.CmdBuf[1] = 0x99;
-			CmdNew.CmdBuf[2] = 0x17;
-			CmdNew.CmdBuf[3] = 0x05;
-			CmdNew.CmdBuf[4] = 0x17;
+			CmdNew.CmdBuf[2] = UdsUtil::HEX2BCD(systime.wYear % 1000);
+			CmdNew.CmdBuf[3] = UdsUtil::HEX2BCD(systime.wMonth);
+			CmdNew.CmdBuf[4] = UdsUtil::HEX2BCD(systime.wDay);
 			CmdNew.CmdLen = 5;
 			push_cmd(CmdNew);
 			break;
@@ -1000,7 +1024,7 @@ void CUdsClient::do_upgrade(void)
 	if (upgrade_status == UDS_PROG_APP_DOWNLOADING)
 		curre_step = 21 + (73 * total_xmit_len / app_size);
 	if (upgrade_status > UDS_PROG_APP_DOWNLOADING)
-		curre_step = upgrade_status + 81;
+		curre_step = upgrade_status + 80;
 }
 
 /**

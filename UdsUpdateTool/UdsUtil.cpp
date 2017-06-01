@@ -340,3 +340,29 @@ UINT UdsUtil::crc32_discontinue(UINT org_rst, BYTE *data, UINT len)
 
 	return ~result;             /* The complement of the remainder */
 }
+/**
+* BCD2HEX - 
+*
+* @data:
+*
+* returns:
+*     transformed value
+*/
+BYTE UdsUtil::BCD2HEX(UINT bcd_data)
+{
+	BYTE temp;
+	temp = ((bcd_data >> 8) * 100) | ((bcd_data >> 4) * 10) | (bcd_data & 0x0f);
+	return temp;
+}
+// HEXתBCD
+//hex_data(<0xff,>0)
+UINT UdsUtil::HEX2BCD(BYTE hex_data)
+{
+	UINT bcd_data;
+	BYTE temp;
+	temp = hex_data % 100;
+	bcd_data = ((unsigned int)hex_data) / 100 << 8;
+	bcd_data = bcd_data | temp / 10 << 4;
+	bcd_data = bcd_data | temp % 10;
+	return bcd_data;
+}

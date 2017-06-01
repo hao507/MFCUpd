@@ -200,6 +200,7 @@ public:
 private:
 	void uds_timer_start(BYTE num);
 	void uds_timer_stop(BYTE num);
+	void uds_timer_clear(BYTE num);
 	int  uds_timer_run(BYTE num);
 	int  uds_timer_chk(BYTE num);
 

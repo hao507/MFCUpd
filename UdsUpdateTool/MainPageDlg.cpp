@@ -99,7 +99,7 @@ void CMainPageDlg::InsertItem(INT Dire, VCI_CAN_OBJ * pCanObj)
 	CString str;
 	CString str1;
 
-	if (nextrow >= 59999)
+	if (nextrow >= 10000)
 	{
 		m_RecvList.DeleteAllItems();
 		nextrow = 0;
@@ -169,7 +169,7 @@ void CMainPageDlg::PrintLog(UINT LogColor, CString LogContent)
 	INT Index = m_Editprint.GetLineCount();
 	m_Editprint.LineScroll(Index, 0);
 
-	if (Index > 10000)
+	if (Index > 5000)
 	{
 		m_Cstrprint.Empty();
 	}
@@ -203,6 +203,7 @@ void CMainPageDlg::OnMenuClrlist()
 {
 	// TODO: 在此添加命令处理程序代码
 	m_RecvList.DeleteAllItems();
+	nextrow = 0;
 	UpdateData(FALSE);//更新数据
 }
 
@@ -211,5 +212,6 @@ void CMainPageDlg::OnBnClickedButtonClear()
 {
 	// TODO: 在此添加控件通知处理程序代码
 	m_RecvList.DeleteAllItems();
+	nextrow = 0;
 	UpdateData(FALSE);//更新数据
 }

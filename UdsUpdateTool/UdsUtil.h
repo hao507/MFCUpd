@@ -6,7 +6,7 @@
 #define UNDEFINESEED				0xFFFFFFFF
 #define SEEDMASK					0x80000000
 #define SHIFTBIT					1
-#define ALGORITHMASK				0x4D313231
+#define ALGORITHMASK				0x4D313232
 
 
 /* CRC */
@@ -29,5 +29,7 @@ public:
 	static void ascii_to_hex(unsigned char *src_buff, unsigned char *dst_buff, int src_len);
 	static UINT crc32_continue(BYTE *data, UINT len);
 	static UINT crc32_discontinue(UINT org_rst, BYTE *data, UINT len);
+	static BYTE BCD2HEX(UINT bcd_data);
+	static UINT HEX2BCD(BYTE hex_data);
 };
 
