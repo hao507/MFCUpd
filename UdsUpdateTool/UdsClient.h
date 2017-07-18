@@ -121,7 +121,7 @@ typedef struct
 #define RET_TIMOUT_S3    0x01
 #define RET_TIMOUT_P2    0x02
 #define RET_TIMOUT_P2_x  0x04
-#define RET_RESPONSE     0x08
+#define RET_NEGRSP       0x08
 #define RET_DONE         0x10
 
 

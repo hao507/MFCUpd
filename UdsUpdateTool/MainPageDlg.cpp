@@ -169,7 +169,7 @@ void CMainPageDlg::PrintLog(UINT LogColor, CString LogContent)
 	INT Index = m_Editprint.GetLineCount();
 	m_Editprint.LineScroll(Index, 0);
 
-	if (Index > 5000)
+	if (Index > 10)
 	{
 		m_Cstrprint.Empty();
 	}

@@ -87,6 +87,8 @@ BEGIN_MESSAGE_MAP(CUdsUpdateToolDlg, CDialogEx)
 	ON_COMMAND(ID_MENU_RDDID, &CUdsUpdateToolDlg::OnMenuRddid)
 	ON_COMMAND(ID_MENU_ENTER_IAP, &CUdsUpdateToolDlg::OnMenuEnterIap)
 	ON_COMMAND(ID_MENU_WRDID, &CUdsUpdateToolDlg::OnMenuWrdid)
+	ON_COMMAND(ID_MENU_SA, &CUdsUpdateToolDlg::OnMenuSa)
+	ON_COMMAND(ID_MENU_ECU_RESET_LV2, &CUdsUpdateToolDlg::OnMenuEcuResetLv2)
 END_MESSAGE_MAP()
 
 
@@ -240,7 +242,7 @@ INT CUdsUpdateToolDlg::TransmitCanmsg(VCI_CAN_OBJ *SendObj)
 		return flag;
 	}
 
-	dlg->m_MainPage.InsertItem(1, SendObj);
+	//dlg->m_MainPage.InsertItem(1, SendObj);
 	return flag;
 }
 
@@ -266,9 +268,13 @@ UINT CUdsUpdateToolDlg::ReceiveThread(LPVOID v)
 		for (num = 0; num<NumValue; num++)
 		{
 			ReceivedID = pCanObj[num].ID;
-			if (ReceivedID == dlg->UdsClient.m_Rspid)
+			if (ReceivedID == dlg->UdsClient.m_Rspid) {
 				dlg->UdsClient.netowrk_recv_frame(0, pCanObj[num].Data, pCanObj[num].DataLen);
-			dlg->m_MainPage.InsertItem(0, &pCanObj[num]);
+			}else{
+				str.Format(_T(">>Received ID Err"));
+				dlg->m_MainPage.PrintLog(0, str);
+			}
+			//dlg->m_MainPage.InsertItem(0, &pCanObj[num]);
 		}
 
 		if (dlg->UdsClient.n_ResultErr == TRUE)
@@ -278,18 +284,24 @@ UINT CUdsUpdateToolDlg::ReceiveThread(LPVOID v)
 			dlg->m_MainPage.PrintLog(0, str);
 		}
 
-
 		main_ret = pObj->main_loop();
-		if (main_ret != 0) {
+		if (main_ret & RET_DONE) {
+			str.Format(_T(">>uds main loop. update done"));
+			dlg->m_MainPage.PrintLog(0, str);
+		}
+		else if (main_ret & RET_NEGRSP){
+			str.Format(_T(">>uds main loop. neg response"));
+			dlg->m_MainPage.PrintLog(0, str);
+		}
+		else if (main_ret != 0) {
 			str.Format(_T(">>uds main loop. error %d"), main_ret);
 			dlg->m_MainPage.PrintLog(0, str);
 		}
 
-
 		if (dlg->m_MainPage.m_ProgUpdate.GetPos() < dlg->UdsClient.curre_step)
 			dlg->m_MainPage.m_ProgUpdate.StepIt();
 
-		Sleep(1);
+		//Sleep(1);
 	}
 
 	return 1;
@@ -516,5 +528,43 @@ void CUdsUpdateToolDlg::OnMenuWrdid()
 	CmdNew.CmdBuf[3] = UdsUtil::HEX2BCD(systime.wMonth);
 	CmdNew.CmdBuf[4] = UdsUtil::HEX2BCD(systime.wDay);
 	CmdNew.CmdLen = 5;
+	UdsClient.push_cmd(CmdNew);
+}
+
+
+void CUdsUpdateToolDlg::OnMenuSa()
+{
+	// TODO: 在此添加命令处理程序代码
+}
+
+
+void CUdsUpdateToolDlg::OnMenuEcuResetLv2()
+{
+	// TODO: 在此添加命令处理程序代码
+	// TODO: 在此添加命令处理程序代码
+	UdsCmd CmdNew;
+
+	//Request Externded session
+	CmdNew.SID = SID_10;
+	CmdNew.CmdBuf[0] = 0x03;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+
+	//Push request cmd, request seed
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x05;
+	CmdNew.CmdLen = 1;
+	UdsClient.push_cmd(CmdNew);
+
+	//Push request cmd, send key
+	CmdNew.SID = SID_27;
+	CmdNew.CmdBuf[0] = 0x06;
+	CmdNew.CmdLen = 5;
+	UdsClient.push_cmd(CmdNew);
+
+	//Request Reset
+	CmdNew.SID = SID_11;
+	CmdNew.CmdBuf[0] = 0x01;
+	CmdNew.CmdLen = 1;
 	UdsClient.push_cmd(CmdNew);
 }

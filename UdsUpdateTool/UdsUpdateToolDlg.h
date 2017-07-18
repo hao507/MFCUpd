@@ -72,4 +72,6 @@ public:
 	afx_msg void OnMenuRddid();
 	afx_msg void OnMenuEnterIap();
 	afx_msg void OnMenuWrdid();
+	afx_msg void OnMenuSa();
+	afx_msg void OnMenuEcuResetLv2();
 };

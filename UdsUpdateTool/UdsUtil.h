@@ -10,7 +10,7 @@
 
 
 /* CRC */
-#define CRC32_INIT 0xFFFFFFFFul
+#define CRC32_INIT 0x0          /* 0xFFFFFFFFul */
 #define CRC32_POLY 0x04c11db7ul
 
 class UdsUtil

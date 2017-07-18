@@ -633,7 +633,8 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 	if (m_GetRsp == FALSE) return 0;
 	m_GetRsp = FALSE;
 
-	if (msg_buf[0] == NEGATIVE_RSP && m_RspNrc != NRC_SERVICE_BUSY)
+	if ((msg_buf[0] == NEGATIVE_RSP && m_RspNrc != NRC_SERVICE_BUSY) ||
+		(msg_buf[5] == 0x01         && m_RspSid == SID_31))
 	{
 		upgrade_status = UDS_PROG_NONE;
 		return 0x01;
@@ -738,13 +739,13 @@ BYTE CUdsClient::do_response(BYTE msg_buf[], WORD msg_dlc)
 			{
 				m_UpdRsp = TRUE;
 				upgrade_status = UDS_PROG_FLASH_DRIVER_DOWNLOADING;
-				block_len = UdsUtil::can_to_hostl(&msg_buf[2]);
+				block_len = UdsUtil::can_to_hostl(&msg_buf[2]) - 2;
 			}
 			if (upgrade_status == UDS_PROG_APP_REQ_DOWNLOAD)
 			{
 				m_UpdRsp = TRUE;
 				upgrade_status = UDS_PROG_APP_DOWNLOADING;
-				block_len = UdsUtil::can_to_hostl(&msg_buf[2]);
+				block_len = UdsUtil::can_to_hostl(&msg_buf[2]) - 2;
 			}
 			break;
 		case SID_36:
@@ -1143,7 +1144,7 @@ BYTE CUdsClient::main_loop(void)
 	if (do_response(RspData, RspDlc) != 0)
 	{
 		uds_timer_stop(UDS_TIMER_S3client);
-		ret |= RET_RESPONSE;
+		ret |= RET_NEGRSP;
 	}
 
 	if (upgrade_status == UDS_PROG_ENUM_MAX)
@@ -1156,7 +1157,7 @@ BYTE CUdsClient::main_loop(void)
 }
 
 /**
-* sv_request - uds service request
+* request - uds service request
 *
 * @void  :
 *

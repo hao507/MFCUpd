@@ -397,6 +397,7 @@ int CUdsNetwork::recv_flowcontrolframe(BYTE frame_buf[], BYTE frame_dlc)
 	else
 		g_rfc_stmin = 0x7f; /* 127 ms */
 
+	g_rfc_stmin = 0x01;
 							/* start to transmit consecutive frame */
 	g_xcf_bc = 0;
 	nt_timer_start_wv(TIMER_STmin, 1);
